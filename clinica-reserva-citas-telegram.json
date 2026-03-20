@@ -1,0 +1,660 @@
+{
+  "name": "Clínica - Reserva de Citas via Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 460],
+      "webhookId": "clinic-booking-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-start",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-start",
+      "name": "¿Es /start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "🏥 *¡Bienvenido a la Clínica!*\n\nSoy el asistente virtual para reservar citas médicas.\n\nSelecciona una opción del menú:",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": [
+                  {
+                    "text": "📅 Reservar Cita",
+                    "additionalFields": {
+                      "callback_data": "reservar_cita"
+                    }
+                  }
+                ]
+              },
+              {
+                "row": [
+                  {
+                    "text": "📋 Mis Citas",
+                    "additionalFields": {
+                      "callback_data": "mis_citas"
+                    }
+                  }
+                ]
+              },
+              {
+                "row": [
+                  {
+                    "text": "❌ Cancelar Cita",
+                    "additionalFields": {
+                      "callback_data": "cancelar_cita"
+                    }
+                  }
+                ]
+              },
+              {
+                "row": [
+                  {
+                    "text": "ℹ️ Información",
+                    "additionalFields": {
+                      "callback_data": "info"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "id": "send-welcome",
+      "name": "Enviar Bienvenida",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [700, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-chat-id",
+              "name": "chatId",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-username",
+              "name": "username",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.username || $('Telegram Trigger').item.json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-text",
+              "name": "textoMensaje",
+              "value": "={{ $('Telegram Trigger').item.json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-first-name",
+              "name": "nombre",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-data",
+      "name": "Extraer Datos del Mensaje",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [700, 600]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 1000
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Eres un asistente de reservas de una clínica médica. Tu trabajo es extraer la información de la cita del mensaje del paciente.\n\nLas especialidades disponibles son:\n- Medicina General\n- Odontología\n- Pediatría\n- Ginecología\n- Dermatología\n- Oftalmología\n- Cardiología\n- Traumatología\n\nHorarios disponibles: Lunes a Viernes de 8:00 a 18:00, Sábados de 8:00 a 13:00.\n\nDebes responder SIEMPRE en formato JSON con estos campos:\n{\n  \"entendido\": true/false,\n  \"especialidad\": \"nombre de la especialidad\",\n  \"fecha\": \"YYYY-MM-DD\",\n  \"hora\": \"HH:MM\",\n  \"nombrePaciente\": \"nombre del paciente\",\n  \"telefono\": \"número de teléfono\",\n  \"motivo\": \"motivo de la consulta\",\n  \"datosCompletos\": true/false,\n  \"datosFaltantes\": [\"lista de datos que faltan\"],\n  \"mensajeRespuesta\": \"mensaje amable para el paciente\"\n}\n\nSi el paciente no ha proporcionado todos los datos, pon datosCompletos en false e indica qué datos faltan en datosFaltantes. Genera un mensajeRespuesta amable pidiendo los datos faltantes.\n\nSi todos los datos están completos, confirma la cita en mensajeRespuesta con un resumen.\n\nFecha de hoy para referencia: {{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.textoMensaje }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-process",
+      "name": "IA - Procesar Solicitud",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.4,
+      "position": [960, 600],
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet aiText = '';\n\n// Extraer texto de la respuesta de OpenAI\nif (response.choices && response.choices[0]) {\n  aiText = response.choices[0].message.content;\n} else if (response.message && response.message.content) {\n  aiText = response.message.content;\n} else if (typeof response === 'string') {\n  aiText = response;\n}\n\n// Limpiar el texto para extraer JSON\nlet cleanText = aiText.trim();\nif (cleanText.startsWith('```json')) {\n  cleanText = cleanText.slice(7);\n}\nif (cleanText.startsWith('```')) {\n  cleanText = cleanText.slice(3);\n}\nif (cleanText.endsWith('```')) {\n  cleanText = cleanText.slice(0, -3);\n}\ncleanText = cleanText.trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanText);\n} catch (e) {\n  parsed = {\n    entendido: false,\n    datosCompletos: false,\n    mensajeRespuesta: 'Lo siento, no pude entender tu mensaje. ¿Podrías indicarme qué especialidad necesitas, la fecha y hora preferida, tu nombre y teléfono?',\n    datosFaltantes: ['especialidad', 'fecha', 'hora', 'nombrePaciente', 'telefono', 'motivo']\n  };\n}\n\n// Obtener datos del nodo anterior\nconst chatId = $('Extraer Datos del Mensaje').first().json.chatId;\nconst username = $('Extraer Datos del Mensaje').first().json.username;\n\nreturn [{\n  json: {\n    ...parsed,\n    chatId,\n    username\n  }\n}];"
+      },
+      "id": "parse-ai-response",
+      "name": "Parsear Respuesta IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-datos-completos",
+              "leftValue": "={{ $json.datosCompletos }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-datos-completos",
+      "name": "¿Datos Completos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 600]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.mensajeRespuesta }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "pedir-datos-faltantes",
+      "name": "Pedir Datos Faltantes",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1700, 780],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Citas"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID_Cita": "={{ 'CITA-' + $now.format('yyyyMMddHHmmss') + '-' + Math.floor(Math.random() * 1000) }}",
+            "Fecha_Registro": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+            "Nombre_Paciente": "={{ $json.nombrePaciente }}",
+            "Telefono": "={{ $json.telefono }}",
+            "Username_Telegram": "={{ $json.username }}",
+            "Chat_ID": "={{ $json.chatId }}",
+            "Especialidad": "={{ $json.especialidad }}",
+            "Fecha_Cita": "={{ $json.fecha }}",
+            "Hora_Cita": "={{ $json.hora }}",
+            "Motivo_Consulta": "={{ $json.motivo }}",
+            "Estado": "Confirmada"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_Cita",
+              "displayName": "ID_Cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fecha_Registro",
+              "displayName": "Fecha_Registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nombre_Paciente",
+              "displayName": "Nombre_Paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Username_Telegram",
+              "displayName": "Username_Telegram",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Chat_ID",
+              "displayName": "Chat_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Especialidad",
+              "displayName": "Especialidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fecha_Cita",
+              "displayName": "Fecha_Cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hora_Cita",
+              "displayName": "Hora_Cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Motivo_Consulta",
+              "displayName": "Motivo_Consulta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-google-sheets",
+      "name": "Guardar en Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1700, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GOOGLE_CALENDAR_ID"
+        },
+        "title": "=🏥 Cita: {{ $('Parsear Respuesta IA').item.json.nombrePaciente }} - {{ $('Parsear Respuesta IA').item.json.especialidad }}",
+        "start": "={{ $('Parsear Respuesta IA').item.json.fecha }}T{{ $('Parsear Respuesta IA').item.json.hora }}:00",
+        "end": "={{ $('Parsear Respuesta IA').item.json.fecha }}T{{ (parseInt($('Parsear Respuesta IA').item.json.hora.split(':')[0]) + 1).toString().padStart(2, '0') }}:{{ $('Parsear Respuesta IA').item.json.hora.split(':')[1] }}:00",
+        "additionalFields": {
+          "description": "=📋 *Detalles de la Cita*\n\n👤 Paciente: {{ $('Parsear Respuesta IA').item.json.nombrePaciente }}\n📱 Teléfono: {{ $('Parsear Respuesta IA').item.json.telefono }}\n💬 Telegram: @{{ $('Parsear Respuesta IA').item.json.username }}\n🩺 Especialidad: {{ $('Parsear Respuesta IA').item.json.especialidad }}\n📝 Motivo: {{ $('Parsear Respuesta IA').item.json.motivo }}\n\n📅 Registrado: {{ $now.format('yyyy-MM-dd HH:mm') }}",
+          "location": "Clínica - Consultorio",
+          "color": "9",
+          "sendUpdates": "all",
+          "reminders": {
+            "reminderValues": [
+              {
+                "method": "popup",
+                "minutes": 30
+              },
+              {
+                "method": "email",
+                "minutes": 1440
+              }
+            ]
+          }
+        }
+      },
+      "id": "save-google-calendar",
+      "name": "Crear Evento en Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [1700, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
+          "name": "Google Calendar - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parsear Respuesta IA').item.json.chatId }}",
+        "text": "=✅ *¡Cita Confirmada!*\n\n📋 *Resumen de tu cita:*\n\n👤 Paciente: {{ $('Parsear Respuesta IA').item.json.nombrePaciente }}\n🩺 Especialidad: {{ $('Parsear Respuesta IA').item.json.especialidad }}\n📅 Fecha: {{ $('Parsear Respuesta IA').item.json.fecha }}\n🕐 Hora: {{ $('Parsear Respuesta IA').item.json.hora }}\n📝 Motivo: {{ $('Parsear Respuesta IA').item.json.motivo }}\n\n📌 *Recordatorios:*\n• Recibirás un recordatorio 24h antes\n• Llega 15 minutos antes de tu cita\n• Trae tu documento de identidad\n\nPara cancelar o reprogramar, escribe /start",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-confirmation",
+      "name": "Enviar Confirmación por Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1980, 420],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=ℹ️ *Información de la Clínica*\n\n🏥 *Clínica [Nombre]*\n📍 Dirección: [Tu dirección]\n📞 Teléfono: [Tu teléfono]\n\n🕐 *Horarios:*\n• Lunes a Viernes: 8:00 - 18:00\n• Sábados: 8:00 - 13:00\n• Domingos: Cerrado\n\n🩺 *Especialidades:*\n• Medicina General\n• Odontología\n• Pediatría\n• Ginecología\n• Dermatología\n• Oftalmología\n• Cardiología\n• Traumatología\n\nPara reservar una cita, simplemente escríbeme tu especialidad, fecha, hora preferida, nombre y teléfono.\n\n_Ejemplo: Quiero una cita de medicina general para el lunes a las 10am, mi nombre es Juan Pérez, teléfono 555-1234, dolor de cabeza frecuente._",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-info",
+      "name": "Enviar Info Clínica",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [700, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-info",
+              "leftValue": "={{ $('Telegram Trigger').item.json.message.text }}",
+              "rightValue": "/info",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-info",
+      "name": "¿Es /info?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parsear Respuesta IA').item.json.chatId }}",
+        "text": "⚠️ *Ha ocurrido un error al procesar tu cita.*\n\nPor favor, intenta de nuevo o contacta al consultorio directamente.\n\nEscribe /start para volver al menú principal.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "error-handler",
+      "name": "Notificar Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1980, 680],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot - Clínica"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "¿Es /start?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Es /info?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es /start?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Bienvenida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraer Datos del Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es /info?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Info Clínica",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Extraer Datos del Mensaje": {
+      "main": [
+        [
+          {
+            "node": "IA - Procesar Solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA - Procesar Solicitud": {
+      "main": [
+        [
+          {
+            "node": "Parsear Respuesta IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Respuesta IA": {
+      "main": [
+        [
+          {
+            "node": "¿Datos Completos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos Completos?": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Crear Evento en Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedir Datos Faltantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Enviar Confirmación por Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Clínica",
+      "id": "1"
+    },
+    {
+      "name": "Telegram",
+      "id": "2"
+    },
+    {
+      "name": "Automatización",
+      "id": "3"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-20T00:00:00.000Z",
+  "versionId": "1"
+}
