@@ -24,7 +24,7 @@
         "promptType": "define",
         "text": "={{ $json.message.text }}",
         "options": {
-          "systemMessage": "Eres el asistente virtual de una clínica médica. Tu trabajo es ayudar a los pacientes a reservar citas médicas por Telegram.\n\n## Especialidades disponibles:\n- Medicina General\n- Odontología\n- Pediatría\n- Ginecología\n- Dermatología\n- Oftalmología\n- Cardiología\n- Traumatología\n\n## Horarios:\n- Lunes a Viernes: 8:00 a 18:00\n- Sábados: 8:00 a 13:00\n- Domingos: Cerrado\n\n## Tu comportamiento:\n1. Cuando el paciente quiera reservar una cita, recopila estos datos de forma conversacional:\n   - Nombre completo del paciente\n   - Teléfono de contacto\n   - Especialidad deseada\n   - Fecha preferida (formato YYYY-MM-DD)\n   - Hora preferida (formato HH:MM)\n   - Motivo de la consulta\n\n2. Cuando tengas TODOS los datos completos:\n   - Usa la herramienta de Google Sheets para guardar la cita con estos valores en una fila: Nombre, Telefono, Especialidad, Fecha, Hora, Motivo, Estado (siempre 'Confirmada')\n   - Usa la herramienta de Google Calendar para crear un evento con título '🏥 Cita: [Nombre] - [Especialidad]', la fecha y hora indicadas, duración de 1 hora, y en la descripción incluye todos los datos del paciente\n   - Confirma al paciente con un resumen bonito de su cita\n\n3. Si el paciente pregunta por información de la clínica, dale los horarios y especialidades.\n4. Si quiere cancelar, indícale que se comunique directamente con la clínica.\n5. Sé amable, profesional y conciso.\n6. Responde siempre en español.\n\nFecha de hoy: {{ $now.format('yyyy-MM-dd') }}"
+          "systemMessage": "Eres el asistente virtual de una clínica médica. Tu trabajo es ayudar a los pacientes a reservar citas médicas por Telegram.\n\n## Especialidades disponibles:\n- Medicina General\n- Odontología\n- Pediatría\n- Ginecología\n- Dermatología\n- Oftalmología\n- Cardiología\n- Traumatología\n\n## Horarios:\n- Lunes a Viernes: 8:00 a 18:00\n- Sábados: 8:00 a 13:00\n- Domingos: Cerrado\n\n## Tu comportamiento:\n1. Cuando el paciente quiera reservar una cita, recopila estos datos de forma conversacional:\n   - Nombre completo del paciente\n   - Teléfono de contacto\n   - Especialidad deseada\n   - Fecha preferida (formato YYYY-MM-DD)\n   - Hora preferida (formato HH:MM)\n   - Motivo de la consulta\n\n2. Cuando tengas TODOS los datos completos:\n   - Usa la herramienta de Google Sheets para guardar la cita\n   - Usa la herramienta de Google Calendar para crear el evento\n   - Confirma al paciente con un resumen de su cita\n\n3. Si el paciente pregunta por información de la clínica, dale los horarios y especialidades.\n4. Si quiere cancelar, indícale que se comunique directamente con la clínica.\n5. Sé amable, profesional y conciso.\n6. Responde siempre en español.\n\nFecha de hoy: {{ $now.format('yyyy-MM-dd') }}"
         }
       },
       "id": "b1a2c3d4-0001-4000-a000-000000000002",
@@ -44,7 +44,7 @@
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
-      "position": [340, 620],
+      "position": [300, 620],
       "credentials": {
         "openAiApi": {
           "id": "OPENAI_CREDENTIAL_ID",
@@ -60,51 +60,93 @@
       "name": "Memoria de Conversación",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [480, 620]
+      "position": [440, 620]
     },
     {
       "parameters": {
         "name": "guardar_cita_google_sheets",
-        "description": "Guarda una nueva cita médica en la hoja de cálculo de Google Sheets. Usa esta herramienta cuando tengas todos los datos del paciente completos para registrar la cita.",
-        "workflowId": "__SUBWORKFLOW_SHEETS__",
+        "description": "Guarda una nueva cita médica en Google Sheets. Usa esta herramienta cuando tengas todos los datos del paciente completos (nombre, telefono, especialidad, fecha, hora, motivo).",
+        "source": "define",
+        "workflowJson": {
+          "nodes": [
+            {
+              "parameters": {},
+              "id": "sw-sheets-trigger",
+              "name": "Inicio",
+              "type": "n8n-nodes-base.executeWorkflowTrigger",
+              "typeVersion": 1.1,
+              "position": [200, 300]
+            },
+            {
+              "parameters": {
+                "operation": "append",
+                "documentId": {
+                  "__rl": true,
+                  "mode": "url",
+                  "value": "TU_URL_DE_GOOGLE_SHEET"
+                },
+                "sheetName": {
+                  "__rl": true,
+                  "mode": "list",
+                  "value": "Citas"
+                },
+                "columns": {
+                  "mappingMode": "defineBelow",
+                  "value": {
+                    "Fecha_Registro": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+                    "Nombre": "={{ $json.nombre }}",
+                    "Telefono": "={{ $json.telefono }}",
+                    "Especialidad": "={{ $json.especialidad }}",
+                    "Fecha_Cita": "={{ $json.fecha }}",
+                    "Hora_Cita": "={{ $json.hora }}",
+                    "Motivo": "={{ $json.motivo }}",
+                    "Estado": "Confirmada"
+                  },
+                  "matchingColumns": [],
+                  "schema": [
+                    { "id": "Fecha_Registro", "displayName": "Fecha_Registro", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Nombre", "displayName": "Nombre", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Telefono", "displayName": "Telefono", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Especialidad", "displayName": "Especialidad", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Fecha_Cita", "displayName": "Fecha_Cita", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Hora_Cita", "displayName": "Hora_Cita", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Motivo", "displayName": "Motivo", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+                    { "id": "Estado", "displayName": "Estado", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+                  ]
+                },
+                "options": {}
+              },
+              "id": "sw-sheets-save",
+              "name": "Google Sheets",
+              "type": "n8n-nodes-base.googleSheets",
+              "typeVersion": 4.5,
+              "position": [420, 300],
+              "credentials": {
+                "googleSheetsOAuth2Api": {
+                  "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+                  "name": "Google Sheets - Clínica"
+                }
+              }
+            }
+          ],
+          "connections": {
+            "Inicio": {
+              "main": [
+                [
+                  { "node": "Google Sheets", "type": "main", "index": 0 }
+                ]
+              ]
+            }
+          }
+        },
         "fields": {
           "values": [
-            {
-              "name": "nombre",
-              "description": "Nombre completo del paciente",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "telefono",
-              "description": "Teléfono de contacto del paciente",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "especialidad",
-              "description": "Especialidad médica de la cita",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "fecha",
-              "description": "Fecha de la cita en formato YYYY-MM-DD",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "hora",
-              "description": "Hora de la cita en formato HH:MM",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "motivo",
-              "description": "Motivo o razón de la consulta médica",
-              "type": "string",
-              "required": true
-            }
+            { "name": "nombre", "description": "Nombre completo del paciente", "type": "string", "required": true },
+            { "name": "telefono", "description": "Teléfono de contacto", "type": "string", "required": true },
+            { "name": "especialidad", "description": "Especialidad médica", "type": "string", "required": true },
+            { "name": "fecha", "description": "Fecha de la cita en formato YYYY-MM-DD", "type": "string", "required": true },
+            { "name": "hora", "description": "Hora de la cita en formato HH:MM", "type": "string", "required": true },
+            { "name": "motivo", "description": "Motivo de la consulta", "type": "string", "required": true }
           ]
         }
       },
@@ -112,39 +154,74 @@
       "name": "Tool - Google Sheets",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
-      "position": [620, 620]
+      "position": [580, 620]
     },
     {
       "parameters": {
         "name": "crear_evento_google_calendar",
-        "description": "Crea un evento en Google Calendar para la cita médica. Usa esta herramienta junto con la de Google Sheets cuando todos los datos estén completos.",
-        "workflowId": "__SUBWORKFLOW_CALENDAR__",
+        "description": "Crea un evento en Google Calendar para la cita médica. Usa esta herramienta cuando todos los datos estén completos para agendar la cita en el calendario.",
+        "source": "define",
+        "workflowJson": {
+          "nodes": [
+            {
+              "parameters": {},
+              "id": "sw-cal-trigger",
+              "name": "Inicio",
+              "type": "n8n-nodes-base.executeWorkflowTrigger",
+              "typeVersion": 1.1,
+              "position": [200, 300]
+            },
+            {
+              "parameters": {
+                "calendar": {
+                  "__rl": true,
+                  "mode": "list",
+                  "value": "TU_CALENDAR_ID"
+                },
+                "title": "={{ $json.titulo }}",
+                "start": "={{ $json.fecha }}T{{ $json.hora }}:00",
+                "end": "={{ $json.fecha }}T{{ (parseInt($json.hora.split(':')[0]) + 1).toString().padStart(2, '0') }}:{{ $json.hora.split(':')[1] }}:00",
+                "additionalFields": {
+                  "description": "={{ $json.descripcion }}",
+                  "location": "Clínica",
+                  "color": "9",
+                  "reminders": {
+                    "reminderValues": [
+                      { "method": "popup", "minutes": 30 },
+                      { "method": "email", "minutes": 1440 }
+                    ]
+                  }
+                }
+              },
+              "id": "sw-cal-create",
+              "name": "Google Calendar",
+              "type": "n8n-nodes-base.googleCalendar",
+              "typeVersion": 1.3,
+              "position": [420, 300],
+              "credentials": {
+                "googleCalendarOAuth2Api": {
+                  "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
+                  "name": "Google Calendar - Clínica"
+                }
+              }
+            }
+          ],
+          "connections": {
+            "Inicio": {
+              "main": [
+                [
+                  { "node": "Google Calendar", "type": "main", "index": 0 }
+                ]
+              ]
+            }
+          }
+        },
         "fields": {
           "values": [
-            {
-              "name": "titulo",
-              "description": "Título del evento, formato: 🏥 Cita: [Nombre] - [Especialidad]",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "fecha",
-              "description": "Fecha de la cita en formato YYYY-MM-DD",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "hora",
-              "description": "Hora de inicio en formato HH:MM",
-              "type": "string",
-              "required": true
-            },
-            {
-              "name": "descripcion",
-              "description": "Descripción del evento con los datos del paciente",
-              "type": "string",
-              "required": true
-            }
+            { "name": "titulo", "description": "Título del evento. Formato: Cita: [Nombre] - [Especialidad]", "type": "string", "required": true },
+            { "name": "fecha", "description": "Fecha en formato YYYY-MM-DD", "type": "string", "required": true },
+            { "name": "hora", "description": "Hora de inicio en formato HH:MM", "type": "string", "required": true },
+            { "name": "descripcion", "description": "Descripción con todos los datos del paciente", "type": "string", "required": true }
           ]
         }
       },
@@ -152,7 +229,7 @@
       "name": "Tool - Google Calendar",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
-      "position": [760, 620]
+      "position": [720, 620]
     },
     {
       "parameters": {
@@ -179,66 +256,42 @@
     "Telegram Trigger": {
       "main": [
         [
-          {
-            "node": "Agente IA - Clínica",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Agente IA - Clínica", "type": "main", "index": 0 }
         ]
       ]
     },
     "Agente IA - Clínica": {
       "main": [
         [
-          {
-            "node": "Responder por Telegram",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Responder por Telegram", "type": "main", "index": 0 }
         ]
       ]
     },
     "OpenAI Chat Model": {
       "ai_languageModel": [
         [
-          {
-            "node": "Agente IA - Clínica",
-            "type": "ai_languageModel",
-            "index": 0
-          }
+          { "node": "Agente IA - Clínica", "type": "ai_languageModel", "index": 0 }
         ]
       ]
     },
     "Memoria de Conversación": {
       "ai_memory": [
         [
-          {
-            "node": "Agente IA - Clínica",
-            "type": "ai_memory",
-            "index": 0
-          }
+          { "node": "Agente IA - Clínica", "type": "ai_memory", "index": 0 }
         ]
       ]
     },
     "Tool - Google Sheets": {
       "ai_tool": [
         [
-          {
-            "node": "Agente IA - Clínica",
-            "type": "ai_tool",
-            "index": 0
-          }
+          { "node": "Agente IA - Clínica", "type": "ai_tool", "index": 0 }
         ]
       ]
     },
     "Tool - Google Calendar": {
       "ai_tool": [
         [
-          {
-            "node": "Agente IA - Clínica",
-            "type": "ai_tool",
-            "index": 0
-          }
+          { "node": "Agente IA - Clínica", "type": "ai_tool", "index": 0 }
         ]
       ]
     }
@@ -257,5 +310,5 @@
   ],
   "triggerCount": 1,
   "updatedAt": "2026-03-20T00:00:00.000Z",
-  "versionId": "2"
+  "versionId": "3"
 }
