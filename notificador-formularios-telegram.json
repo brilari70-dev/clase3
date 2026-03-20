@@ -1,0 +1,291 @@
+{
+  "name": "Notificador de Formularios - Telegram",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "📋 Formulario recibido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "formulario-contacto",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "webhookId": "formulario-contacto",
+      "notes": "Recibe los datos del formulario de contacto vía HTTP POST. Es el punto de entrada del flujo: cualquier formulario (web, Instagram, landing) envía los datos aquí."
+    },
+    {
+      "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "name": "✏️ Formatear datos del prospecto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 300],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-nombre",
+              "name": "nombre",
+              "value": "={{ $json.body.nombre }}",
+              "type": "string"
+            },
+            {
+              "id": "field-email",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "field-telefono",
+              "name": "telefono",
+              "value": "={{ $json.body.telefono }}",
+              "type": "string"
+            },
+            {
+              "id": "field-consulta",
+              "name": "consulta",
+              "value": "={{ $json.body.consulta }}",
+              "type": "string"
+            },
+            {
+              "id": "field-origen",
+              "name": "origen",
+              "value": "={{ $json.body.origen }}",
+              "type": "string"
+            },
+            {
+              "id": "field-fechaHora",
+              "name": "fechaHora",
+              "value": "={{ $now.format('DD/MM/YYYY HH:mm') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "Extrae y normaliza los campos del formulario recibido por webhook. Prepara variables limpias para usar en los nodos siguientes."
+    },
+    {
+      "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "name": "💬 Construir mensaje de notificación",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [750, 300],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-mensajeTelegram",
+              "name": "mensajeTelegram",
+              "value": "=🔔 *NUEVO PROSPECTO*\n\n👤 *Nombre:* {{ $json.nombre }}\n📧 *Email:* {{ $json.email }}\n📱 *Teléfono:* {{ $json.telefono }}\n💬 *Consulta:* {{ $json.consulta }}\n📍 *Origen:* {{ $json.origen }}\n🕐 *Fecha y hora:* {{ $json.fechaHora }}\n\nRespondé lo antes posible para no perder este lead 🚀",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "notes": "Construye el mensaje formateado en Markdown para Telegram con todos los datos del prospecto. Incluye emojis para facilitar la lectura rápida en el celular."
+    },
+    {
+      "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
+      "name": "📲 Notificar al dueño por Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1000, 300],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "TU_CHAT_ID_AQUI",
+        "text": "={{ $json.mensajeTelegram }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "TELEGRAM_BOT_TOKEN"
+        }
+      },
+      "notes": "Envía la notificación instantánea al dueño del negocio por Telegram. El mensaje llega al celular en segundos para que pueda responder rápido al prospecto."
+    },
+    {
+      "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
+      "name": "📊 Guardar en Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1250, 300],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_GOOGLE_SHEET_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "prospectos",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nombre": "={{ $json.nombre }}",
+            "Email": "={{ $json.email }}",
+            "Telefono": "={{ $json.telefono }}",
+            "Consulta": "={{ $json.consulta }}",
+            "Origen": "={{ $json.origen }}",
+            "FechaHora": "={{ $json.fechaHora }}",
+            "Estado": "Nuevo"
+          },
+          "matchingColumns": ["Email"],
+          "schema": [
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "Consulta",
+              "displayName": "Consulta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "Origen",
+              "displayName": "Origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "FechaHora",
+              "displayName": "FechaHora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_OAUTH2",
+          "name": "GOOGLE_SHEETS_OAUTH2"
+        }
+      },
+      "notes": "Registra cada prospecto en Google Sheets para llevar un historial y seguimiento. Usa email como clave para evitar duplicados y marca el estado como Nuevo."
+    }
+  ],
+  "connections": {
+    "📋 Formulario recibido": {
+      "main": [
+        [
+          {
+            "node": "✏️ Formatear datos del prospecto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ Formatear datos del prospecto": {
+      "main": [
+        [
+          {
+            "node": "💬 Construir mensaje de notificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Construir mensaje de notificación": {
+      "main": [
+        [
+          {
+            "node": "📲 Notificar al dueño por Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 Notificar al dueño por Telegram": {
+      "main": [
+        [
+          {
+            "node": "📊 Guardar en Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "formularios"
+    },
+    {
+      "name": "telegram"
+    },
+    {
+      "name": "notificaciones"
+    },
+    {
+      "name": "prospectos"
+    }
+  ],
+  "pinData": {}
+}
