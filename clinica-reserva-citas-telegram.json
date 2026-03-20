@@ -24,7 +24,7 @@
         "promptType": "define",
         "text": "={{ $json.message.text }}",
         "options": {
-          "systemMessage": "Eres el asistente virtual de una clínica médica. Tu trabajo es ayudar a los pacientes a reservar citas médicas por Telegram.\n\n## Especialidades disponibles:\n- Medicina General\n- Odontología\n- Pediatría\n- Ginecología\n- Dermatología\n- Oftalmología\n- Cardiología\n- Traumatología\n\n## Horarios:\n- Lunes a Viernes: 8:00 a 18:00\n- Sábados: 8:00 a 13:00\n- Domingos: Cerrado\n\n## Tu comportamiento:\n1. Cuando el paciente quiera reservar una cita, recopila estos datos de forma conversacional:\n   - Nombre completo del paciente\n   - Teléfono de contacto\n   - Especialidad deseada\n   - Fecha preferida (formato YYYY-MM-DD)\n   - Hora preferida (formato HH:MM)\n   - Motivo de la consulta\n\n2. Cuando tengas TODOS los datos completos:\n   - Usa la herramienta de Google Sheets para guardar la cita\n   - Usa la herramienta de Google Calendar para crear el evento\n   - Confirma al paciente con un resumen de su cita\n\n3. Si el paciente pregunta por información de la clínica, dale los horarios y especialidades.\n4. Si quiere cancelar, indícale que se comunique directamente con la clínica.\n5. Sé amable, profesional y conciso.\n6. Responde siempre en español.\n\nFecha de hoy: {{ $now.format('yyyy-MM-dd') }}"
+          "systemMessage": "Eres el asistente virtual de una clínica médica. Tu trabajo es ayudar a los pacientes a reservar citas médicas por Telegram.\n\n## Especialidades disponibles:\n- Medicina General\n- Odontología\n- Pediatría\n- Ginecología\n- Dermatología\n- Oftalmología\n- Cardiología\n- Traumatología\n\n## Horarios:\n- Lunes a Viernes: 8:00 a 18:00\n- Sábados: 8:00 a 13:00\n- Domingos: Cerrado\n\n## Tu comportamiento:\n1. Saluda brevemente y pregunta en qué puedes ayudar.\n2. Cuando el paciente quiera reservar una cita, recopila estos datos uno por uno de forma conversacional:\n   - Nombre completo del paciente\n   - Teléfono de contacto\n   - Especialidad deseada\n   - Fecha preferida (formato YYYY-MM-DD)\n   - Hora preferida (formato HH:MM)\n   - Motivo de la consulta\n\n3. IMPORTANTE: Cuando tengas TODOS los 6 datos completos, DEBES ejecutar las dos herramientas:\n   a) Primero: Llama a 'guardar_cita_google_sheets' con los 6 campos para registrar la cita\n   b) Segundo: Llama a 'crear_evento_google_calendar' para agendar en el calendario\n   c) Después de ejecutar ambas herramientas, confirma al paciente con un resumen\n\n4. NO confirmes la cita sin haber ejecutado las herramientas primero.\n5. Si el paciente pregunta por información de la clínica, dale los horarios y especialidades.\n6. Si quiere cancelar, indícale que se comunique directamente con la clínica.\n7. Sé amable, profesional y conciso.\n8. Responde siempre en español.\n\nFecha de hoy: {{ $now.format('yyyy-MM-dd') }}"
         }
       },
       "id": "b1a2c3d4-0001-4000-a000-000000000002",
@@ -54,7 +54,9 @@
     },
     {
       "parameters": {
-        "contextWindowLength": 10
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "contextWindowLength": 15
       },
       "id": "b1a2c3d4-0001-4000-a000-000000000004",
       "name": "Memoria de Conversación",
@@ -65,7 +67,7 @@
     {
       "parameters": {
         "name": "guardar_cita_google_sheets",
-        "description": "Guarda una nueva cita médica en Google Sheets. Usa esta herramienta cuando tengas todos los datos del paciente completos (nombre, telefono, especialidad, fecha, hora, motivo).",
+        "description": "Guarda una nueva cita médica en la hoja de Google Sheets. DEBES usar esta herramienta cuando tengas los 6 datos del paciente: nombre, telefono, especialidad, fecha, hora y motivo. Ejecuta esta herramienta ANTES de confirmar la cita al paciente.",
         "source": "define",
         "workflowJson": {
           "nodes": [
@@ -117,7 +119,7 @@
                 "options": {}
               },
               "id": "sw-sheets-save",
-              "name": "Google Sheets",
+              "name": "Google Sheets - Guardar Cita",
               "type": "n8n-nodes-base.googleSheets",
               "typeVersion": 4.5,
               "position": [420, 300],
@@ -133,7 +135,7 @@
             "Inicio": {
               "main": [
                 [
-                  { "node": "Google Sheets", "type": "main", "index": 0 }
+                  { "node": "Google Sheets - Guardar Cita", "type": "main", "index": 0 }
                 ]
               ]
             }
@@ -142,11 +144,11 @@
         "fields": {
           "values": [
             { "name": "nombre", "description": "Nombre completo del paciente", "type": "string", "required": true },
-            { "name": "telefono", "description": "Teléfono de contacto", "type": "string", "required": true },
-            { "name": "especialidad", "description": "Especialidad médica", "type": "string", "required": true },
+            { "name": "telefono", "description": "Teléfono de contacto del paciente", "type": "string", "required": true },
+            { "name": "especialidad", "description": "Especialidad médica solicitada", "type": "string", "required": true },
             { "name": "fecha", "description": "Fecha de la cita en formato YYYY-MM-DD", "type": "string", "required": true },
             { "name": "hora", "description": "Hora de la cita en formato HH:MM", "type": "string", "required": true },
-            { "name": "motivo", "description": "Motivo de la consulta", "type": "string", "required": true }
+            { "name": "motivo", "description": "Motivo o razón de la consulta médica", "type": "string", "required": true }
           ]
         }
       },
@@ -159,7 +161,7 @@
     {
       "parameters": {
         "name": "crear_evento_google_calendar",
-        "description": "Crea un evento en Google Calendar para la cita médica. Usa esta herramienta cuando todos los datos estén completos para agendar la cita en el calendario.",
+        "description": "Crea un evento en Google Calendar para agendar la cita médica. DEBES usar esta herramienta junto con guardar_cita_google_sheets cuando tengas todos los datos completos del paciente.",
         "source": "define",
         "workflowJson": {
           "nodes": [
@@ -184,17 +186,11 @@
                 "additionalFields": {
                   "description": "={{ $json.descripcion }}",
                   "location": "Clínica",
-                  "color": "9",
-                  "reminders": {
-                    "reminderValues": [
-                      { "method": "popup", "minutes": 30 },
-                      { "method": "email", "minutes": 1440 }
-                    ]
-                  }
+                  "color": "9"
                 }
               },
               "id": "sw-cal-create",
-              "name": "Google Calendar",
+              "name": "Google Calendar - Crear Evento",
               "type": "n8n-nodes-base.googleCalendar",
               "typeVersion": 1.3,
               "position": [420, 300],
@@ -210,7 +206,7 @@
             "Inicio": {
               "main": [
                 [
-                  { "node": "Google Calendar", "type": "main", "index": 0 }
+                  { "node": "Google Calendar - Crear Evento", "type": "main", "index": 0 }
                 ]
               ]
             }
@@ -219,9 +215,9 @@
         "fields": {
           "values": [
             { "name": "titulo", "description": "Título del evento. Formato: Cita: [Nombre] - [Especialidad]", "type": "string", "required": true },
-            { "name": "fecha", "description": "Fecha en formato YYYY-MM-DD", "type": "string", "required": true },
-            { "name": "hora", "description": "Hora de inicio en formato HH:MM", "type": "string", "required": true },
-            { "name": "descripcion", "description": "Descripción con todos los datos del paciente", "type": "string", "required": true }
+            { "name": "fecha", "description": "Fecha de la cita en formato YYYY-MM-DD", "type": "string", "required": true },
+            { "name": "hora", "description": "Hora de inicio de la cita en formato HH:MM", "type": "string", "required": true },
+            { "name": "descripcion", "description": "Descripción completa con todos los datos del paciente: nombre, teléfono, especialidad, fecha, hora y motivo", "type": "string", "required": true }
           ]
         }
       },
@@ -310,5 +306,5 @@
   ],
   "triggerCount": 1,
   "updatedAt": "2026-03-20T00:00:00.000Z",
-  "versionId": "3"
+  "versionId": "4"
 }
