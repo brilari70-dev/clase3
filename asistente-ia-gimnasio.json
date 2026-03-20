@@ -1,0 +1,232 @@
+{
+  "name": "Asistente IA Gimnasio - Citas, Leads y Telegram",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-1111-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "📋 Chat recibido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 500],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asistente-gimnasio",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "asistente-gimnasio",
+      "notes": "Punto de entrada del asistente. Recibe mensajes del usuario vía POST con campos: sessionId (para mantener conversación), mensaje (texto del usuario), y opcionalmente nombre/email/telefono si ya se conocen."
+    },
+    {
+      "id": "b2c3d4e5-2222-4b8c-9d0e-1f2a3b4c5d6e",
+      "name": "🤖 Agente IA - Asistente del Gimnasio",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [550, 500],
+      "parameters": {
+        "options": {
+          "systemMessage": "=Sos un asistente virtual amigable y profesional del gimnasio FitZone. Tu objetivo es:\n\n1. **Atender consultas** sobre planes, horarios y servicios del gimnasio.\n2. **Capturar datos de leads** (nombre, email, teléfono, consulta, origen) y guardarlos usando la herramienta 'guardar_lead'.\n3. **Agendar citas** de prueba gratuita o consultas presenciales usando la herramienta 'agendar_cita'.\n4. **Notificar al dueño** por Telegram cuando hay un nuevo lead calificado o una cita agendada usando la herramienta 'notificar_telegram'.\n\n## Información del Gimnasio FitZone:\n- **Planes disponibles:**\n  - Plan Básico: $15.000/mes - Acceso a sala de musculación L-V 8-22hs\n  - Plan Full: $22.000/mes - Musculación + clases grupales L-S 7-23hs\n  - Plan Premium: $30.000/mes - Todo incluido + personal trainer 1 vez/semana\n- **Dirección:** Av. Corrientes 1234, CABA\n- **Clase de prueba gratuita:** Disponible de lunes a viernes, 9-20hs, duración 1 hora\n\n## Reglas de comportamiento:\n- Hablá en español rioplatense (vos, sos, tenés)\n- Sé cálido pero profesional\n- Siempre intentá obtener nombre, email y teléfono del prospecto\n- Cuando tengas los datos completos del lead, guardalos automáticamente\n- Cuando el usuario quiera agendar, ofrecé horarios disponibles y confirmá la cita\n- Después de agendar una cita o capturar un lead nuevo, notificá al dueño por Telegram\n- Si no sabés algo, decí que vas a consultar con el equipo y que se van a comunicar pronto\n\n## Flujo típico de conversación:\n1. Saludar y preguntar en qué podés ayudar\n2. Responder consultas sobre planes/servicios\n3. Pedir datos de contacto naturalmente en la conversación\n4. Guardar el lead cuando tengas los datos\n5. Ofrecer agendar una clase de prueba\n6. Confirmar la cita y notificar al dueño\n\nFecha y hora actual: {{ $now.format('DD/MM/YYYY HH:mm') }}"
+        }
+      },
+      "notes": "Cerebro del asistente. Usa un LLM con system prompt especializado para gimnasios. Decide cuándo guardar leads, agendar citas y notificar al dueño. Tiene acceso a 3 herramientas que ejecuta según el contexto de la conversación."
+    },
+    {
+      "id": "c3d4e5f6-3333-4c9d-0e1f-2a3b4c5d6e7f",
+      "name": "🧠 OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [350, 280],
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 1024
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API_KEY",
+          "name": "OPENAI_API_KEY"
+        }
+      },
+      "notes": "Modelo de lenguaje que potencia al agente. Usa gpt-4o-mini por su buen balance costo/calidad. Podés cambiarlo por gpt-4o para mayor inteligencia o por un modelo de Anthropic."
+    },
+    {
+      "id": "d4e5f6a7-4444-4d0e-1f2a-3b4c5d6e7f8a",
+      "name": "💾 Memoria de Conversación",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [550, 280],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.sessionId }}",
+        "contextWindowLength": 20
+      },
+      "notes": "Mantiene el contexto de la conversación usando un sessionId único por usuario. Recuerda los últimos 20 mensajes para que el agente sepa qué se habló antes y no repita preguntas."
+    },
+    {
+      "id": "e5f6a7b8-5555-4e1f-2a3b-4c5d6e7f8a9b",
+      "name": "📊 Herramienta: Guardar Lead",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [750, 100],
+      "parameters": {
+        "name": "guardar_lead",
+        "description": "Guarda los datos de un nuevo prospecto/lead en Google Sheets. Usá esta herramienta cuando tengas el nombre, email y teléfono del usuario. Parámetros: nombre (string), email (string), telefono (string), consulta (string, resumen de lo que preguntó), origen (string, de dónde viene: web, instagram, whatsapp, etc).",
+        "jsCode": "// Esta herramienta guarda un lead en Google Sheets via HTTP\n// Reemplazá GOOGLE_APPS_SCRIPT_URL con tu URL real de Google Apps Script\n// que reciba los datos y los escriba en tu Sheet.\n\nconst input = JSON.parse($input);\n\nconst webhookUrl = 'GOOGLE_APPS_SCRIPT_URL_AQUI';\n\nconst leadData = {\n  nombre: input.nombre || 'Sin nombre',\n  email: input.email || 'Sin email',\n  telefono: input.telefono || 'Sin teléfono',\n  consulta: input.consulta || 'Sin consulta',\n  origen: input.origen || 'Asistente IA',\n  estado: 'Nuevo',\n  fechaHora: new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })\n};\n\ntry {\n  const response = await fetch(webhookUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(leadData)\n  });\n  return `Lead guardado exitosamente: ${leadData.nombre} (${leadData.email})`;\n} catch (error) {\n  return `Error al guardar lead: ${error.message}. Los datos del lead son: ${JSON.stringify(leadData)}`;\n}"
+      },
+      "notes": "Herramienta que el agente IA invoca para guardar datos de un prospecto en Google Sheets. Usa Google Apps Script como intermediario para escribir en la hoja de cálculo. El agente la llama automáticamente cuando reúne nombre, email y teléfono."
+    },
+    {
+      "id": "f6a7b8c9-6666-4f2a-3b4c-5d6e7f8a9b0c",
+      "name": "📅 Herramienta: Agendar Cita",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [950, 100],
+      "parameters": {
+        "name": "agendar_cita",
+        "description": "Agenda una cita o clase de prueba en Google Calendar. Usá esta herramienta cuando el usuario confirme que quiere agendar. Parámetros: nombre (string, nombre del cliente), email (string, email del cliente), fecha (string, formato YYYY-MM-DD), hora (string, formato HH:mm), tipo (string, 'clase_prueba' o 'consulta'), notas (string, observaciones adicionales).",
+        "jsCode": "// Esta herramienta agenda una cita en Google Calendar via HTTP\n// Reemplazá GOOGLE_APPS_SCRIPT_CALENDAR_URL con tu URL real\n\nconst input = JSON.parse($input);\n\nconst webhookUrl = 'GOOGLE_APPS_SCRIPT_CALENDAR_URL_AQUI';\n\nconst citaData = {\n  nombre: input.nombre || 'Cliente',\n  email: input.email || '',\n  fecha: input.fecha,\n  hora: input.hora,\n  tipo: input.tipo || 'clase_prueba',\n  notas: input.notas || '',\n  duracion: 60\n};\n\n// Validar que la fecha sea futura\nconst fechaCita = new Date(`${citaData.fecha}T${citaData.hora}:00`);\nconst ahora = new Date();\n\nif (fechaCita <= ahora) {\n  return 'Error: La fecha y hora de la cita debe ser en el futuro. Pedile al usuario que elija otra fecha.';\n}\n\n// Validar horario (9-20hs)\nconst horaNum = parseInt(citaData.hora.split(':')[0]);\nif (horaNum < 9 || horaNum >= 20) {\n  return 'Error: El horario disponible para citas es de 9:00 a 20:00 hs. Pedile al usuario que elija un horario dentro de ese rango.';\n}\n\ntry {\n  const response = await fetch(webhookUrl, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(citaData)\n  });\n  return `Cita agendada exitosamente para ${citaData.nombre} el ${citaData.fecha} a las ${citaData.hora}hs. Tipo: ${citaData.tipo}.`;\n} catch (error) {\n  return `Error al agendar cita: ${error.message}. Datos: ${JSON.stringify(citaData)}`;\n}"
+      },
+      "notes": "Herramienta que el agente IA invoca para agendar citas o clases de prueba. Valida horarios (9-20hs) y fechas futuras antes de crear el evento. Usa Google Apps Script para escribir en Google Calendar."
+    },
+    {
+      "id": "a7b8c9d0-7777-4a3b-4c5d-6e7f8a9b0c1d",
+      "name": "📲 Herramienta: Notificar Telegram",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1150, 100],
+      "parameters": {
+        "name": "notificar_telegram",
+        "description": "Envía una notificación al dueño del gimnasio por Telegram. Usá esta herramienta después de guardar un lead nuevo o agendar una cita para que el dueño se entere al instante. Parámetros: tipo (string, 'nuevo_lead' o 'cita_agendada'), resumen (string, resumen breve de la información relevante incluyendo nombre, contacto y detalles).",
+        "jsCode": "// Esta herramienta envía una notificación por Telegram\n// Reemplazá BOT_TOKEN y CHAT_ID con tus valores reales\n\nconst input = JSON.parse($input);\n\nconst BOT_TOKEN = 'TU_BOT_TOKEN_AQUI';\nconst CHAT_ID = 'TU_CHAT_ID_AQUI';\n\nconst emoji = input.tipo === 'cita_agendada' ? '📅' : '🔔';\nconst titulo = input.tipo === 'cita_agendada' ? 'NUEVA CITA AGENDADA' : 'NUEVO LEAD';\n\nconst mensaje = `${emoji} *${titulo}*\\n\\n${input.resumen}\\n\\n🕐 _${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}_\\n\\n🚀 ¡Respondé rápido para cerrar esta oportunidad!`;\n\ntry {\n  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;\n  const response = await fetch(url, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      chat_id: CHAT_ID,\n      text: mensaje,\n      parse_mode: 'Markdown'\n    })\n  });\n  const result = await response.json();\n  if (result.ok) {\n    return 'Notificación enviada exitosamente al dueño por Telegram.';\n  } else {\n    return `Error de Telegram: ${result.description}`;\n  }\n} catch (error) {\n  return `Error al enviar notificación: ${error.message}`;\n}"
+      },
+      "notes": "Herramienta que el agente IA invoca para notificar al dueño del gimnasio por Telegram. Se usa después de guardar un lead o agendar una cita. Envía un mensaje formateado con Markdown."
+    },
+    {
+      "id": "b8c9d0e1-8888-4b4c-5d6e-7f8a9b0c1d2e",
+      "name": "✅ Responder al usuario",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [850, 500],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"respuesta\": $json.output, \"sessionId\": $('📋 Chat recibido').first().json.body.sessionId } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "notes": "Devuelve la respuesta del agente IA al usuario que hizo la petición al webhook. Incluye el sessionId para que el frontend pueda mantener la conversación."
+    }
+  ],
+  "connections": {
+    "📋 Chat recibido": {
+      "main": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Agente IA - Asistente del Gimnasio": {
+      "main": [
+        [
+          {
+            "node": "✅ Responder al usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Memoria de Conversación": {
+      "ai_memory": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Herramienta: Guardar Lead": {
+      "ai_tool": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Herramienta: Agendar Cita": {
+      "ai_tool": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 Herramienta: Notificar Telegram": {
+      "ai_tool": [
+        [
+          {
+            "node": "🤖 Agente IA - Asistente del Gimnasio",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ia"
+    },
+    {
+      "name": "agente"
+    },
+    {
+      "name": "telegram"
+    },
+    {
+      "name": "leads"
+    },
+    {
+      "name": "citas"
+    },
+    {
+      "name": "gimnasio"
+    }
+  ],
+  "pinData": {}
+}
